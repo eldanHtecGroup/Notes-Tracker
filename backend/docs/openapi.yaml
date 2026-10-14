@@ -12,6 +12,11 @@ info:
     - Successful responses are wrapped as `{ "data": ... }`; errors as `{ "error": { "message", "details"? } }`.
     - Request bodies must be JSON (`Content-Type: application/json`) and at most 100 KB.
     - Every action (list, view, create, update, delete) is written to the server log. Note content is never logged.
+
+    **Swagger UI:** with the backend running, open http://localhost:5000/api/docs to browse this
+    spec and send requests with "Try it out". The server URL below is the base path for every
+    endpoint (e.g. `/api/health`, `/api/notes`); `/api` on its own returns 404. The spec is loaded
+    when the server starts, so restart it after editing this file.
 servers:
   - url: http://localhost:5000/api
     description: Local development

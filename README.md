@@ -41,7 +41,11 @@ npm run test:coverage     # everything, plus a coverage report
 
 ### API
 
-Base URL: `http://localhost:5000/api`
+Base URL: `http://localhost:5000/api`. This is a prefix for the paths below; `/api` on its own returns 404.
+
+- Swagger UI: start the backend and open [http://localhost:5000/api/docs](http://localhost:5000/api/docs) to browse every endpoint and call it from the browser with "Try it out". The page is built from the OpenAPI spec when the server starts, so restart the server after editing the spec.
+- OpenAPI spec: [backend/docs/openapi.yaml](backend/docs/openapi.yaml)
+- Postman collection: [backend/docs/postman/notes-tracker.postman_collection.json](backend/docs/postman/notes-tracker.postman_collection.json). Import it into Postman, start the backend, and run the whole collection in order. It covers the full note lifecycle, every validation error, not-found cases, malformed or oversized requests, unknown routes and CORS, and it deletes the notes it creates.
 
 | Method | Path         | Body                   | Result                                      |
 | ------ | ------------ | ---------------------- | ------------------------------------------- |
