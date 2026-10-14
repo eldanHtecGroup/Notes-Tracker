@@ -1,0 +1,2583 @@
+{
+  "info": {
+    "name": "Notes Tracker API",
+    "description": "Every scenario for the Notes Tracker API. Start the backend (`npm run dev` in backend/), then run the whole collection in order with the Collection Runner or Newman.\n\nFolders clean up after themselves. Set `baseUrl` if the API is not on http://localhost:5000/api, and `frontendOrigin` to match `CORS_ORIGIN`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api"
+    },
+    {
+      "key": "frontendOrigin",
+      "value": "http://localhost:5173"
+    },
+    {
+      "key": "unknownNoteId",
+      "value": "00000000-0000-4000-8000-000000000000"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Health",
+      "description": "Server status.",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Status is ok', () => pm.expect(body.status).to.eql('ok'));",
+                  "pm.test('Timestamp is ISO 8601', () => pm.expect(new Date(body.timestamp).toISOString()).to.eql(body.timestamp));",
+                  "pm.test('Security headers are set', () => pm.response.to.have.header('X-Content-Type-Options', 'nosniff'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Notes lifecycle (happy path)",
+      "description": "Run in order: creates notes, lists, reads, updates in every supported way, deletes, and cleans up after itself.",
+      "item": [
+        {
+          "name": "Create note with title and content",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Groceries\",\n  \"content\": \"Milk, eggs, bread\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Saves title and content', () => {",
+                  "  pm.expect(note.title).to.eql('Groceries');",
+                  "  pm.expect(note.content).to.eql('Milk, eggs, bread');",
+                  "});",
+                  "pm.test('updatedAt equals createdAt on creation', () => pm.expect(note.updatedAt).to.eql(note.createdAt));",
+                  "pm.collectionVariables.set('noteId', note.id);",
+                  "pm.collectionVariables.set('noteCreatedAt', note.createdAt);",
+                  "pm.collectionVariables.set('noteUpdatedAt', note.updatedAt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create note with title only",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Ideas\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Content defaults to an empty string', () => pm.expect(note.content).to.eql(''));",
+                  "pm.collectionVariables.set('titleOnlyNoteId', note.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create note trims the title",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"   Padded title   \",\n  \"content\": \"  content is kept as-is  \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Title is trimmed', () => pm.expect(note.title).to.eql('Padded title'));",
+                  "pm.test('Content is not trimmed', () => pm.expect(note.content).to.eql('  content is kept as-is  '));",
+                  "pm.collectionVariables.set('trimmedNoteId', note.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create note at maximum lengths (200 / 50,000)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{maxTitle}}\",\n  \"content\": \"{{maxContent}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('maxTitle', 't'.repeat(200));",
+                  "pm.collectionVariables.set('maxContent', 'c'.repeat(50000));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Accepts a 200-character title', () => pm.expect(note.title).to.have.lengthOf(200));",
+                  "pm.test('Accepts 50,000 characters of content', () => pm.expect(note.content).to.have.lengthOf(50000));",
+                  "pm.collectionVariables.set('maxLengthNoteId', note.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create note with unicode and special characters",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Café ☕ – 日本語 \\\"quotes\\\"\",\n  \"content\": \"Line 1\\nLine 2\\t<b>not html</b> 🎉\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Stores text exactly', () => {",
+                  "  pm.expect(note.title).to.eql('Café ☕ – 日本語 \"quotes\"');",
+                  "  pm.expect(note.content).to.eql('Line 1\\nLine 2\\t<b>not html</b> 🎉');",
+                  "});",
+                  "pm.collectionVariables.set('unicodeNoteId', note.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create note ignores client-supplied id and timestamps",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Spoof attempt\",\n  \"id\": \"my-own-id\",\n  \"createdAt\": \"2000-01-01T00:00:00.000Z\",\n  \"updatedAt\": \"2000-01-01T00:00:00.000Z\",\n  \"extra\": \"ignored\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Server generates the id', () => pm.expect(note.id).to.not.eql('my-own-id'));",
+                  "pm.test('Server sets the timestamps', () => {",
+                  "  pm.expect(note.createdAt).to.not.eql('2000-01-01T00:00:00.000Z');",
+                  "  pm.expect(note.updatedAt).to.not.eql('2000-01-01T00:00:00.000Z');",
+                  "});",
+                  "pm.test('Unknown fields are not stored', () => pm.expect(note).to.not.have.property('extra'));",
+                  "pm.collectionVariables.set('spoofNoteId', note.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const notes = pm.response.json().data;",
+                  "pm.test('Returns an array of notes', () => pm.expect(notes).to.be.an('array'));",
+                  "pm.test('Includes the created notes', () => {",
+                  "  const ids = notes.map((n) => n.id);",
+                  "  ['noteId', 'titleOnlyNoteId', 'trimmedNoteId', 'maxLengthNoteId', 'unicodeNoteId', 'spoofNoteId']",
+                  "    .forEach((key) => pm.expect(ids).to.include(pm.collectionVariables.get(key)));",
+                  "});",
+                  "pm.test('Sorted by most recently modified first', () => {",
+                  "  const times = notes.map((n) => n.updatedAt);",
+                  "  pm.expect(times).to.eql([...times].sort().reverse());",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get note by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{noteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Returns the requested note', () => {",
+                  "  pm.expect(note.id).to.eql(pm.collectionVariables.get('noteId'));",
+                  "  pm.expect(note.title).to.eql('Groceries');",
+                  "  pm.expect(note.content).to.eql('Milk, eggs, bread');",
+                  "});",
+                  "pm.test('Reading does not change updatedAt', () => pm.expect(note.updatedAt).to.eql(pm.collectionVariables.get('noteUpdatedAt')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update title only",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{noteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekly groceries\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Wait a few ms so updatedAt is guaranteed to move forward.",
+                  "setTimeout(() => {}, 5);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Title changes, content is unchanged', () => {",
+                  "  pm.expect(note.title).to.eql('Weekly groceries');",
+                  "  pm.expect(note.content).to.eql('Milk, eggs, bread');",
+                  "});",
+                  "pm.test('createdAt never changes', () => pm.expect(note.createdAt).to.eql(pm.collectionVariables.get('noteCreatedAt')));",
+                  "pm.test('updatedAt moves forward (last modified time)', () => pm.expect(note.updatedAt > pm.collectionVariables.get('noteUpdatedAt')).to.be.true);",
+                  "pm.collectionVariables.set('noteUpdatedAt', note.updatedAt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update content only",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{noteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Milk, eggs, bread, coffee\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Wait a few ms so updatedAt is guaranteed to move forward.",
+                  "setTimeout(() => {}, 5);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Content changes, title is unchanged', () => {",
+                  "  pm.expect(note.title).to.eql('Weekly groceries');",
+                  "  pm.expect(note.content).to.eql('Milk, eggs, bread, coffee');",
+                  "});",
+                  "pm.test('createdAt never changes', () => pm.expect(note.createdAt).to.eql(pm.collectionVariables.get('noteCreatedAt')));",
+                  "pm.test('updatedAt moves forward (last modified time)', () => pm.expect(note.updatedAt > pm.collectionVariables.get('noteUpdatedAt')).to.be.true);",
+                  "pm.collectionVariables.set('noteUpdatedAt', note.updatedAt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update title and content (title is trimmed)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{noteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"  Shopping  \",\n  \"content\": \"Milk, eggs\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Wait a few ms so updatedAt is guaranteed to move forward.",
+                  "setTimeout(() => {}, 5);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Both fields change and the title is trimmed', () => {",
+                  "  pm.expect(note.title).to.eql('Shopping');",
+                  "  pm.expect(note.content).to.eql('Milk, eggs');",
+                  "});",
+                  "pm.test('createdAt never changes', () => pm.expect(note.createdAt).to.eql(pm.collectionVariables.get('noteCreatedAt')));",
+                  "pm.test('updatedAt moves forward (last modified time)', () => pm.expect(note.updatedAt > pm.collectionVariables.get('noteUpdatedAt')).to.be.true);",
+                  "pm.collectionVariables.set('noteUpdatedAt', note.updatedAt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update content to an empty string",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{noteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Wait a few ms so updatedAt is guaranteed to move forward.",
+                  "setTimeout(() => {}, 5);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Content is cleared', () => {",
+                  "  pm.expect(note.title).to.eql('Shopping');",
+                  "  pm.expect(note.content).to.eql('');",
+                  "});",
+                  "pm.test('createdAt never changes', () => pm.expect(note.createdAt).to.eql(pm.collectionVariables.get('noteCreatedAt')));",
+                  "pm.test('updatedAt moves forward (last modified time)', () => pm.expect(note.updatedAt > pm.collectionVariables.get('noteUpdatedAt')).to.be.true);",
+                  "pm.collectionVariables.set('noteUpdatedAt', note.updatedAt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update ignores id and timestamps in the body",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{noteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Shopping list\",\n  \"id\": \"my-own-id\",\n  \"createdAt\": \"2000-01-01T00:00:00.000Z\",\n  \"updatedAt\": \"2000-01-01T00:00:00.000Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Wait a few ms so updatedAt is guaranteed to move forward.",
+                  "setTimeout(() => {}, 5);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Only title changes; id is kept', () => {",
+                  "  pm.expect(note.title).to.eql('Shopping list');",
+                  "  pm.expect(note.id).to.eql(pm.collectionVariables.get('noteId'));",
+                  "});",
+                  "pm.test('createdAt never changes', () => pm.expect(note.createdAt).to.eql(pm.collectionVariables.get('noteCreatedAt')));",
+                  "pm.test('updatedAt moves forward (last modified time)', () => pm.expect(note.updatedAt > pm.collectionVariables.get('noteUpdatedAt')).to.be.true);",
+                  "pm.collectionVariables.set('noteUpdatedAt', note.updatedAt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get note reflects all updates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{noteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Response is a complete note', () => {",
+                  "  pm.expect(note).to.have.all.keys('id', 'title', 'content', 'createdAt', 'updatedAt');",
+                  "  pm.expect(note.id).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);",
+                  "  pm.expect(note.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(note.content).to.be.a('string');",
+                  "  pm.expect(new Date(note.createdAt).toISOString()).to.eql(note.createdAt);",
+                  "  pm.expect(new Date(note.updatedAt).toISOString()).to.eql(note.updatedAt);",
+                  "});",
+                  "pm.test('Latest values are stored', () => {",
+                  "  pm.expect(note.title).to.eql('Shopping list');",
+                  "  pm.expect(note.content).to.eql('');",
+                  "  pm.expect(note.updatedAt).to.eql(pm.collectionVariables.get('noteUpdatedAt'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List shows the last modified note first",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const notes = pm.response.json().data;",
+                  "pm.test('Updated note is first', () => pm.expect(notes[0].id).to.eql(pm.collectionVariables.get('noteId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{noteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));",
+                  "pm.test('Body is empty', () => pm.expect(pm.response.text()).to.eql(''));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get deleted note returns 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{noteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(`Note ${pm.collectionVariables.get('noteId')} not found`));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete already deleted note returns 404",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{noteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(`Note ${pm.collectionVariables.get('noteId')} not found`));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List no longer includes the deleted note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const ids = pm.response.json().data.map((n) => n.id);",
+                  "pm.test('Deleted note is gone', () => pm.expect(ids).to.not.include(pm.collectionVariables.get('noteId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cleanup: delete title-only note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{titleOnlyNoteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cleanup: delete trimmed-title note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{trimmedNoteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cleanup: delete max-length note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{maxLengthNoteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cleanup: delete unicode note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{unicodeNoteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cleanup: delete spoof-attempt note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{spoofNoteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Create note: validation errors",
+      "description": "Every invalid create body returns 400 with the list of problems.",
+      "item": [
+        {
+          "name": "Empty body",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Missing title",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"No title here\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Empty title",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Whitespace-only title",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"   \\t  \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Title is a number",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": 123\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Title is null",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Title is an object",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": {\n    \"text\": \"nested\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Title over 200 characters",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{tooLongTitle}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('tooLongTitle', 't'.repeat(201));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be at most 200 characters\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Content is a number",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Valid\",\n  \"content\": 42\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"content must be a string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Content is null",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Valid\",\n  \"content\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"content must be a string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Content is an array",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Valid\",\n  \"content\": [\n    \"a\",\n    \"b\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"content must be a string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Content over 50,000 characters",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Valid\",\n  \"content\": \"{{tooLongContent}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('tooLongContent', 'c'.repeat(50001));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"content must be at most 50000 characters\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Multiple problems at once",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"\",\n  \"content\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\",\"content must be a string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Body is a JSON array",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  \"Groceries\"\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "No note was created by the invalid requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const titles = pm.response.json().data.map((n) => n.title);",
+                  "pm.test('No invalid note was saved', () => pm.expect(titles).to.not.include('Valid'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Update note: validation errors",
+      "description": "Creates a note, sends every kind of invalid update, checks the note did not change, then deletes it.",
+      "item": [
+        {
+          "name": "Setup: create a note to update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Original title\",\n  \"content\": \"Original content\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "const note = pm.response.json().data;",
+                  "pm.collectionVariables.set('validationNoteId', note.id);",
+                  "pm.collectionVariables.set('validationNoteUpdatedAt', note.updatedAt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Empty body",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"provide at least one of: title, content\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Only unknown fields",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"color\": \"red\",\n  \"pinned\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"provide at least one of: title, content\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Empty title",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Whitespace-only title",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"    \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Title is a number",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": 7\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Title is null",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Title over 200 characters",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{tooLongTitle}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('tooLongTitle', 't'.repeat(201));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be at most 200 characters\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Content is a number",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": 42\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"content must be a string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Content is null",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"content must be a string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Content over 50,000 characters",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"{{tooLongContent}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('tooLongContent', 'c'.repeat(50001));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"content must be at most 50000 characters\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Valid title with invalid content",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Fine\",\n  \"content\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"content must be a string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Multiple problems at once",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"\",\n  \"content\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\",\"content must be a string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Note is unchanged after the failed updates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const note = pm.response.json().data;",
+                  "pm.test('Title and content are unchanged', () => {",
+                  "  pm.expect(note.title).to.eql('Original title');",
+                  "  pm.expect(note.content).to.eql('Original content');",
+                  "});",
+                  "pm.test('updatedAt is unchanged', () => pm.expect(note.updatedAt).to.eql(pm.collectionVariables.get('validationNoteUpdatedAt')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cleanup: delete the note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{validationNoteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Not found",
+      "description": "Requests for notes that do not exist.",
+      "item": [
+        {
+          "name": "Get unknown note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{unknownNoteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(`Note ${pm.collectionVariables.get('unknownNoteId')} not found`));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get note with a non-UUID id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notes/not-a-real-id"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Note not-a-real-id not found\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update unknown note",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{unknownNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Does not matter\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(`Note ${pm.collectionVariables.get('unknownNoteId')} not found`));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update unknown note with an invalid body returns 400 (validation runs first)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{unknownNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"provide at least one of: title, content\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete unknown note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes/{{unknownNoteId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(`Note ${pm.collectionVariables.get('unknownNoteId')} not found`));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Request handling",
+      "description": "Malformed or unsupported requests, size limits, routing and CORS.",
+      "item": [
+        {
+          "name": "Create with malformed JSON",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{bad",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('No validation details', () => pm.expect(error).to.not.have.property('details'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update with malformed JSON",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{unknownNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\": \"unterminated",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('No validation details', () => pm.expect(error).to.not.have.property('details'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create with a non-JSON content type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "title=Groceries"
+            },
+            "description": "Only JSON bodies are parsed, so the body is treated as empty."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Validation failed\"));",
+                  "pm.test('Validation details', () => pm.expect(error.details).to.eql([\"title must be a non-empty string\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create with a body over 100 KB",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Too big\",\n  \"content\": \"{{hugeContent}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('hugeContent', 'x'.repeat(110000));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 413', () => pm.response.to.have.status(413));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"request entity too large\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown route",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/unknown"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Route GET /api/unknown not found\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unsupported method (PUT instead of PATCH)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notes/{{unknownNoteId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"x\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(`Route PUT /api/notes/${pm.collectionVariables.get('unknownNoteId')} not found`));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unsupported method on the collection (DELETE /notes)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/notes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));",
+                  "const { error } = pm.response.json();",
+                  "pm.test('Body is an error with a message', () => {",
+                  "  pm.expect(error).to.be.an('object');",
+                  "  pm.expect(error.message).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Error message', () => pm.expect(error.message).to.eql(\"Route DELETE /api/notes not found\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "CORS preflight from the frontend origin",
+          "request": {
+            "method": "OPTIONS",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{frontendOrigin}}"
+              },
+              {
+                "key": "Access-Control-Request-Method",
+                "value": "PATCH"
+              }
+            ],
+            "url": "{{baseUrl}}/notes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 204', () => pm.response.to.have.status(204));",
+                  "pm.test('Allows the frontend origin', () => pm.response.to.have.header('Access-Control-Allow-Origin', pm.collectionVariables.get('frontendOrigin')));",
+                  "pm.test('Allows PATCH', () => pm.expect(pm.response.headers.get('Access-Control-Allow-Methods')).to.include('PATCH'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

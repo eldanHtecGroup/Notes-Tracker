@@ -1,0 +1,444 @@
+openapi: 3.0.3
+info:
+  title: Notes Tracker API
+  version: 1.0.0
+  description: |
+    Private, single-user API for managing personal notes: write a note with a title and content,
+    view all saved notes, update them and delete the ones no longer needed. Each note records when
+    it was created and when it was last modified.
+
+    - Notes are kept in memory and are cleared when the server restarts.
+    - There are no user accounts and no authentication.
+    - Successful responses are wrapped as `{ "data": ... }`; errors as `{ "error": { "message", "details"? } }`.
+    - Request bodies must be JSON (`Content-Type: application/json`) and at most 100 KB.
+    - Every action (list, view, create, update, delete) is written to the server log. Note content is never logged.
+servers:
+  - url: http://localhost:5000/api
+    description: Local development
+tags:
+  - name: Health
+    description: Server status
+  - name: Notes
+    description: Create, read, update and delete notes
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Check that the server is running
+      operationId: getHealth
+      responses:
+        '200':
+          description: Server is up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example:
+                status: ok
+                timestamp: '2026-10-14T09:22:13.003Z'
+
+  /notes:
+    get:
+      tags: [Notes]
+      summary: List all notes
+      description: Returns every note, most recently modified first (sorted by `updatedAt`, descending). Returns an empty array when there are no notes.
+      operationId: listNotes
+      responses:
+        '200':
+          description: All notes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteListResponse'
+              examples:
+                withNotes:
+                  summary: Two notes, newest change first
+                  value:
+                    data:
+                      - id: 7154a343-ddee-4b56-b81f-6045dfa58c87
+                        title: Weekly groceries
+                        content: Milk, eggs, bread
+                        createdAt: '2026-10-14T09:22:14.392Z'
+                        updatedAt: '2026-10-14T09:30:02.110Z'
+                      - id: 2b1f6f0e-3c4d-4e8a-9a51-0d2c7e1f9b44
+                        title: Ideas
+                        content: ''
+                        createdAt: '2026-10-14T09:25:00.000Z'
+                        updatedAt: '2026-10-14T09:25:00.000Z'
+                empty:
+                  summary: No notes yet
+                  value:
+                    data: []
+    post:
+      tags: [Notes]
+      summary: Create a note
+      description: |
+        `title` is required and is trimmed before saving. `content` is optional and defaults to an empty string.
+        Any other fields (including `id`, `createdAt`, `updatedAt`) are ignored; the server generates them.
+        On creation `updatedAt` equals `createdAt`.
+      operationId: createNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteCreate'
+            examples:
+              titleAndContent:
+                summary: Title and content
+                value:
+                  title: Groceries
+                  content: Milk, eggs, bread
+              titleOnly:
+                summary: Title only (content defaults to "")
+                value:
+                  title: Ideas
+      responses:
+        '201':
+          description: Note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+              example:
+                data:
+                  id: 7154a343-ddee-4b56-b81f-6045dfa58c87
+                  title: Groceries
+                  content: Milk, eggs, bread
+                  createdAt: '2026-10-14T09:22:14.392Z'
+                  updatedAt: '2026-10-14T09:22:14.392Z'
+        '400':
+          $ref: '#/components/responses/CreateBadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /notes/{id}:
+    parameters:
+      - $ref: '#/components/parameters/NoteId'
+    get:
+      tags: [Notes]
+      summary: Get one note
+      operationId: getNote
+      responses:
+        '200':
+          description: The note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+              example:
+                data:
+                  id: 7154a343-ddee-4b56-b81f-6045dfa58c87
+                  title: Groceries
+                  content: Milk, eggs, bread
+                  createdAt: '2026-10-14T09:22:14.392Z'
+                  updatedAt: '2026-10-14T09:22:14.392Z'
+        '404':
+          $ref: '#/components/responses/NoteNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [Notes]
+      summary: Update a note
+      description: |
+        Partial update: only the fields that are sent change. At least one of `title` or `content` is required.
+        `title` is trimmed. Every successful update sets `updatedAt` to the current time; `id` and `createdAt` never change.
+        Other fields in the body are ignored.
+
+        The body is validated before the note is looked up, so an invalid body for an unknown id returns `400`, not `404`.
+      operationId: updateNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteUpdate'
+            examples:
+              titleOnly:
+                summary: Rename
+                value:
+                  title: Weekly groceries
+              contentOnly:
+                summary: Change content
+                value:
+                  content: Milk, eggs, bread, coffee
+              both:
+                summary: Change both
+                value:
+                  title: Shopping
+                  content: Milk, eggs
+              clearContent:
+                summary: Clear content
+                value:
+                  content: ''
+      responses:
+        '200':
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+              example:
+                data:
+                  id: 7154a343-ddee-4b56-b81f-6045dfa58c87
+                  title: Weekly groceries
+                  content: Milk, eggs, bread
+                  createdAt: '2026-10-14T09:22:14.392Z'
+                  updatedAt: '2026-10-14T09:30:02.110Z'
+        '400':
+          $ref: '#/components/responses/UpdateBadRequest'
+        '404':
+          $ref: '#/components/responses/NoteNotFound'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [Notes]
+      summary: Delete a note
+      description: Permanently removes the note. Deleting the same note again returns `404`.
+      operationId: deleteNote
+      responses:
+        '204':
+          description: Note deleted (no body)
+        '404':
+          $ref: '#/components/responses/NoteNotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    NoteId:
+      name: id
+      in: path
+      required: true
+      description: The note's id (a UUID generated by the server). Any value that doesn't match an existing note returns `404`.
+      schema:
+        type: string
+        example: 7154a343-ddee-4b56-b81f-6045dfa58c87
+
+  schemas:
+    Note:
+      type: object
+      required: [id, title, content, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+          example: 7154a343-ddee-4b56-b81f-6045dfa58c87
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: Groceries
+        content:
+          type: string
+          maxLength: 50000
+          example: Milk, eggs, bread
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When the note was created (ISO 8601, UTC).
+        updatedAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When the note was last modified (ISO 8601, UTC). Equals `createdAt` until the first update.
+
+    NoteCreate:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Required. Must contain at least one non-whitespace character; trimmed before saving. Max 200 characters after trimming.
+        content:
+          type: string
+          maxLength: 50000
+          default: ''
+          description: Optional. Max 50,000 characters.
+
+    NoteUpdate:
+      type: object
+      minProperties: 1
+      description: At least one of `title` or `content` must be present.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Must contain at least one non-whitespace character; trimmed before saving. Max 200 characters after trimming.
+        content:
+          type: string
+          maxLength: 50000
+          description: Max 50,000 characters. An empty string clears the content.
+
+    NoteResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: '#/components/schemas/Note'
+
+    NoteListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Note'
+
+    Health:
+      type: object
+      required: [status, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        timestamp:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message]
+          properties:
+            message:
+              type: string
+            details:
+              type: array
+              description: Present on validation errors; one message per problem.
+              items:
+                type: string
+            stack:
+              type: string
+              description: Only on 500 errors when the server runs with NODE_ENV=development.
+
+  responses:
+    CreateBadRequest:
+      description: Invalid request body or malformed JSON
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            missingTitle:
+              summary: Title missing, empty or whitespace only
+              value:
+                error:
+                  message: Validation failed
+                  details: [title must be a non-empty string]
+            titleTooLong:
+              summary: Title over 200 characters
+              value:
+                error:
+                  message: Validation failed
+                  details: [title must be at most 200 characters]
+            contentNotString:
+              summary: Content is not a string
+              value:
+                error:
+                  message: Validation failed
+                  details: [content must be a string]
+            contentTooLong:
+              summary: Content over 50,000 characters
+              value:
+                error:
+                  message: Validation failed
+                  details: [content must be at most 50000 characters]
+            multiple:
+              summary: Several problems at once
+              value:
+                error:
+                  message: Validation failed
+                  details: [title must be a non-empty string, content must be a string]
+            malformedJson:
+              summary: Body is not valid JSON
+              value:
+                error:
+                  message: Unexpected token 'b', "{bad" is not valid JSON
+
+    UpdateBadRequest:
+      description: Invalid request body or malformed JSON
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            nothingToUpdate:
+              summary: Neither title nor content sent
+              value:
+                error:
+                  message: Validation failed
+                  details: ['provide at least one of: title, content']
+            emptyTitle:
+              summary: Title empty or whitespace only
+              value:
+                error:
+                  message: Validation failed
+                  details: [title must be a non-empty string]
+            titleTooLong:
+              summary: Title over 200 characters
+              value:
+                error:
+                  message: Validation failed
+                  details: [title must be at most 200 characters]
+            contentNotString:
+              summary: Content is not a string
+              value:
+                error:
+                  message: Validation failed
+                  details: [content must be a string]
+            contentTooLong:
+              summary: Content over 50,000 characters
+              value:
+                error:
+                  message: Validation failed
+                  details: [content must be at most 50000 characters]
+            malformedJson:
+              summary: Body is not valid JSON
+              value:
+                error:
+                  message: Unexpected token 'b', "{bad" is not valid JSON
+
+    NoteNotFound:
+      description: No note with this id
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              message: Note 00000000-0000-4000-8000-000000000000 not found
+
+    PayloadTooLarge:
+      description: Request body is larger than 100 KB
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              message: request entity too large
+
+    InternalError:
+      description: Unexpected server error. In production the message is always "Internal Server Error".
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              message: Internal Server Error
