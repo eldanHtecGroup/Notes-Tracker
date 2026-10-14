@@ -8,7 +8,7 @@ const router = Router();
 router.get('/', noteController.getAll);
 router.get('/:id', noteController.getById);
 router.post('/', validate(createNoteSchema), noteController.create);
-router.put('/:id', validate(updateNoteSchema), noteController.update);
+router.patch('/:id',validate(updateNoteSchema), noteController.update);
 router.delete('/:id', noteController.remove);
 
 export default router;

@@ -3,7 +3,12 @@ import { buildNote } from '../models/note.model.js';
 import ApiError from '../utils/ApiError.js';
 
 // Services hold business logic and know nothing about req/res.
-const getAllNotes = () => noteRepository.findAll();
+
+// Most recently modified first (ISO timestamps sort correctly as strings).
+const getAllNotes = async () => {
+  const notes = await noteRepository.findAll();
+  return notes.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+};
 
 const getNoteById = async (id) => {
   const note = await noteRepository.findById(id);
@@ -13,10 +18,11 @@ const getNoteById = async (id) => {
 
 const createNote = ({ title, content }) => noteRepository.create(buildNote({ title, content }));
 
+// Only fields that are sent get changed; every update refreshes updatedAt.
 const updateNote = async (id, { title, content }) => {
   await getNoteById(id);
   const changes = { updatedAt: new Date().toISOString() };
-  if (title !== undefined) changes.title = title;
+  if (title !== undefined) changes.title = title.trim();
   if (content !== undefined) changes.content = content;
   return noteRepository.update(id, changes);
 };
