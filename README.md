@@ -12,10 +12,32 @@ cd backend
 cp .env.example .env
 npm install
 npm run dev     # auto-reloads on change; or `npm start`
-npm test
 ```
 
 Notes are kept in an in-memory database, so they are cleared whenever the server restarts.
+
+### Logging
+
+Every user action is logged: listing, viewing, creating, updating and deleting notes. Rejected requests (validation errors, missing notes) are logged as warnings, and server errors as errors with a stack trace. Note content is never logged.
+
+```
+2026-10-14T09:39:36.600Z INFO  Note created {"noteId":"c1f42bbf-…","title":"Diary"}
+2026-10-14T09:39:37.168Z INFO  Note updated {"noteId":"c1f42bbf-…","fields":["content"]}
+2026-10-14T09:39:37.652Z WARN  Request rejected: Note c1f42bbf-… not found {"method":"DELETE",…,"status":404}
+```
+
+Set `LOG_LEVEL` to `debug`, `info`, `warn`, `error` or `silent`. The default is `debug` in development (also logs each HTTP request), `info` in production and `silent` in tests.
+
+### Tests
+
+Uses Node's built-in test runner, so there's nothing extra to install.
+
+```bash
+npm test                  # everything
+npm run test:unit         # unit tests: one file per module under tests/unit/
+npm run test:integration  # HTTP tests against the running app
+npm run test:coverage     # everything, plus a coverage report
+```
 
 ### API
 

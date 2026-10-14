@@ -7,6 +7,7 @@ import config from './config/index.js';
 import routes from './routes/index.js';
 import notFound from './middlewares/notFound.js';
 import errorHandler from './middlewares/errorHandler.js';
+import logger from './utils/logger.js';
 
 const app = express();
 
@@ -14,7 +15,11 @@ app.use(helmet());
 app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-if (config.env !== 'test') app.use(morgan('dev'));
+app.use(
+  morgan(':method :url :status :response-time ms', {
+    stream: { write: (line) => logger.debug(line.trim()) },
+  }),
+);
 
 app.use('/api', routes);
 
