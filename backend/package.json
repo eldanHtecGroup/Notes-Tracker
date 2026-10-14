@@ -1,0 +1,22 @@
+{
+  "name": "notes-tracker-backend",
+  "version": "1.0.0",
+  "description": "Express API for Notes Tracker (layered Route -> Controller -> Service -> Repository architecture)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.7",
+    "express": "^5.3.0",
+    "helmet": "^8.3.0",
+    "morgan": "^1.12.1"
+  }
+}
