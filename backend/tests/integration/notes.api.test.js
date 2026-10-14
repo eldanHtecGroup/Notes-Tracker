@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 // Set before the app (and its config) loads so request logging stays quiet.
 process.env.NODE_ENV = 'test';
-const { default: app } = await import('../src/app.js');
+const { default: app } = await import('../../src/app.js');
 
 let server;
 let baseUrl;
@@ -63,4 +63,16 @@ test('rejects invalid input', async () => {
   const empty = await request('PATCH', `${baseUrl}/${note.id}`, {});
   assert.equal(empty.status, 400);
   assert.deepEqual(empty.body.error.details, ['provide at least one of: title, content']);
+});
+
+test('health check, unknown routes and malformed JSON', async () => {
+  const apiUrl = baseUrl.replace(/\/notes$/, '');
+  const health = await request('GET', `${apiUrl}/health`);
+  assert.equal(health.status, 200);
+  assert.equal(health.body.status, 'ok');
+
+  assert.equal((await request('GET', `${apiUrl}/nope`)).status, 404);
+
+  const res = await fetch(baseUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{bad' });
+  assert.equal(res.status, 400);
 });
