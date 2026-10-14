@@ -2,8 +2,78 @@
 
 A full-stack app for managing personal notes: write a note with a title and content, view all saved notes, update them, and delete the ones you no longer need. Each note tracks when it was last modified.
 
-- `backend/` — Node.js + Express API (layered: routes → controllers → services → repositories)
-- `frontend/` — React app (coming next)
+## Features
+
+- Add a note with a title and content
+- View all saved notes, most recently modified first
+- Edit existing notes
+- Delete notes you no longer want
+- See when each note was last modified
+- Every user action is logged by the backend
+- Every feature is covered by unit tests, in both the backend and the frontend
+
+Notes are kept in an in-memory database, so they are cleared whenever the backend restarts.
+
+## Tech stack
+
+| Part       | Stack                                                           |
+| ---------- | --------------------------------------------------------------- |
+| `backend/`  | Node.js, Express 5, in-memory store, Node's built-in test runner |
+| `frontend/` | React 19, Vite, plain JavaScript, Vitest + React Testing Library |
+
+## Project structure
+
+```
+Notes-Tracker/
+├── backend/                  Express API
+│   ├── docs/                 OpenAPI spec and Postman collection
+│   ├── src/
+│   │   ├── routes/           URL → controller mapping
+│   │   ├── controllers/      HTTP in/out
+│   │   ├── services/         business logic and action logging
+│   │   ├── repositories/     in-memory data store
+│   │   ├── models/           note shape and limits
+│   │   ├── validators/       request body validation
+│   │   ├── middlewares/      validation, 404 and error handling
+│   │   └── utils/            logger, ApiError, asyncHandler
+│   └── tests/                unit and integration tests
+└── frontend/                 React app
+    ├── src/
+    │   ├── api/              fetch wrapper for the notes endpoints
+    │   ├── hooks/            useNotes: notes state and API calls
+    │   ├── components/       NoteForm, NoteList, NoteItem
+    │   └── utils/            date formatting and sorting
+    └── tests/unit/           one test file per module
+```
+
+## Getting started
+
+Requires Node.js 20 or newer.
+
+Start the backend in one terminal:
+
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Start the frontend in a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open [http://localhost:5173](http://localhost:5173). The backend runs on port 5000. The frontend's dev server forwards `/api` requests to it, so start the backend first.
+
+To run every test, from the project root:
+
+```bash
+(cd backend && npm test) && (cd frontend && npm test)
+```
 
 ## Backend
 
@@ -13,8 +83,6 @@ cp .env.example .env
 npm install
 npm run dev     # auto-reloads on change; or `npm start`
 ```
-
-Notes are kept in an in-memory database, so they are cleared whenever the server restarts.
 
 ### Logging
 
@@ -71,3 +139,51 @@ A note looks like:
 `updatedAt` is the last-modified time; it changes on every update.
 
 Successful responses are wrapped as `{ "data": ... }`. Errors return `{ "error": { "message", "details"? } }` with a 400 (validation), 404, or 500 status. Titles are required (max 200 characters); content is optional (max 50,000 characters).
+
+## Frontend
+
+React 19 + Vite, plain JavaScript.
+
+```bash
+cd frontend
+npm install
+npm run dev       # http://localhost:5173
+npm run build     # production build in dist/
+npm run preview   # serve the production build
+```
+
+The dev server proxies `/api` to the backend at `http://localhost:5000`, so start the backend first.
+
+To use a different backend, copy `.env.example` to `.env` and set one of:
+
+| Variable           | Used by          | Purpose                                                                 |
+| ------------------ | ---------------- | ----------------------------------------------------------------------- |
+| `API_PROXY_TARGET` | `npm run dev`    | Where the dev server proxies `/api` to (default `http://localhost:5000`) |
+| `VITE_API_URL`     | the built app    | Full API base URL, e.g. `https://notes.example.com/api`. Read at build time, so rebuild after changing it. If it points to another origin, add that origin to the backend's `CORS_ORIGIN`. |
+
+### Using the app
+
+- **Add:** fill in the title (required, max 200 characters) and optional content in the **New note** form, then click **Add note**.
+- **View:** notes are listed under **Your notes**, most recently modified first. Each shows when it was last modified.
+- **Edit:** click **Edit** on a note, change it, then click **Save changes** (or **Cancel**). Only changed fields are sent, so saving an untouched note doesn't change its last-modified time.
+- **Delete:** click **Delete** and confirm.
+
+Errors from the backend (validation, missing notes, server unreachable) appear next to the form or note they relate to. If the notes can't be loaded, a **Try again** button reloads them.
+
+### Code structure
+
+- `src/api/notesApi.js` — fetch wrapper for the notes endpoints; unwraps `{ data }` and throws `ApiError` on `{ error }`
+- `src/hooks/useNotes.js` — loads the notes and keeps the list in sync after each create, update or delete
+- `src/components/` — `NoteForm` (shared by add and edit), `NoteList`, `NoteItem`
+- `src/utils/` — date formatting and sorting
+- `src/constants.js` — title and content length limits, matching the backend's
+
+### Tests
+
+Vitest + React Testing Library, with one test file per module under `tests/unit/`. The API is mocked, so the backend doesn't need to be running.
+
+```bash
+npm test               # run once
+npm run test:watch     # re-run on change
+npm run test:coverage  # with a coverage report
+```

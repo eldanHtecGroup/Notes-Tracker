@@ -1,0 +1,237 @@
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --text: #1d2330;
+  --text-muted: #5f6b7a;
+  --border: #dde1e7;
+  --accent: #3157d5;
+  --accent-hover: #2546b5;
+  --danger: #c4372f;
+  --danger-bg: #fdecea;
+  --focus: #3157d580;
+  --radius: 10px;
+
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c;
+    --surface: #1e222a;
+    --text: #e6e9ee;
+    --text-muted: #9aa4b2;
+    --border: #323844;
+    --accent: #6d8cf5;
+    --accent-hover: #87a0f7;
+    --danger: #f07a72;
+    --danger-bg: #3a1e1c;
+    --focus: #6d8cf580;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.9rem;
+}
+
+.app-header p {
+  margin: 4px 0 24px;
+  color: var(--text-muted);
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 0 0 12px;
+}
+
+.count {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.panel,
+.note-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.panel {
+  margin-bottom: 32px;
+}
+
+/* Form */
+.note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.note-form label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.note-form input,
+.note-form textarea {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.note-form textarea {
+  resize: vertical;
+}
+
+.note-form input:focus-visible,
+.note-form textarea:focus-visible,
+button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.note-form input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.form-actions,
+.note-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.form-error {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+/* Buttons */
+button {
+  font: inherit;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.button-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.button-secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.button-secondary:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+.button-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: var(--danger-bg);
+}
+
+/* Notes */
+.note-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.note-title {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.note-content {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.note-content-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.note-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.note-modified {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.status,
+.empty-state {
+  color: var(--text-muted);
+}
+
+.load-error {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.load-error p {
+  margin: 0 0 8px;
+}
