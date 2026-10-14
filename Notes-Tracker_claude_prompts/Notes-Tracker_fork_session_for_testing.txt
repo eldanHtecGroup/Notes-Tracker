@@ -1,0 +1,111 @@
+
+> I will past in the chat the requirements for the Notes-Tracker app
+  go through all of the and check does the app match them
+  Create a simple tool that helps users manage their personal notes. Users can
+  write a note with a title and content, view all their saved notes, update any
+  note when needed, or delete the ones they no longer want. Each note should
+  display when it was last modified, so users can keep track of updates.
+  Functionalities
+
+  Add a new note with a title and content
+  View a list of all saved notes
+  Edit existing notes
+  Delete unwanted notes
+  Non-functional requirements
+
+  Log all user actions (e.g., creating, updating, deleting notes)
+  Ensure each feature is covered with at least one unit test
+  No need for persistent data storage
+  Technical hints and constraints
+
+  Use an in-memory database
+
+● I'll go through the codebase and check it against each requirement.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The README makes a lot of claims, so I'll check them against the code and run
+  the tests.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● The code looks right. Next I'll run both test suites and confirm each feature
+  has a unit test.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Backend tests pass (52/52), but the frontend run failed because Vitest's
+  worker processes timed out on startup—an environment issue, not a test
+  failure. I'll retry using threads instead of forks.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● The app meets every requirement. I read the code and ran both test suites: the
+  backend unit tests passed 52/52 and the frontend tests passed 37/37.
+
+  Requirement: Add a note with a title and content
+  Status: ✅
+  Where: POST /api/notes in note.service.js
+  (backend/src/services/note.service.js). In the UI, the "New note" form in
+  App.jsx (frontend/src/App.jsx) uses NoteForm.jsx
+  (frontend/src/components/NoteForm.jsx). The title is required and content is
+  optional.
+  ────────────────────────────────────────
+  Requirement: View a list of all saved notes
+  Status: ✅
+  Where: GET /api/notes lists the most recently modified first. The UI shows
+  them
+  in NoteList.jsx (frontend/src/components/NoteList.jsx) and NoteItem.jsx
+  (frontend/src/components/NoteItem.jsx).
+  ────────────────────────────────────────
+  Requirement: Edit existing notes
+  Status: ✅
+  Where: PATCH /api/notes/:id changes only the fields you send. The UI edits in
+  place in NoteItem.
+  ────────────────────────────────────────
+  Requirement: Delete unwanted notes
+  Status: ✅
+  Where: DELETE /api/notes/:id. The UI asks you to confirm first.
+  ────────────────────────────────────────
+  Requirement: Each note shows when it was last modified
+  Status: ✅
+  Where: updatedAt is set when a note is created and refreshed on every update.
+  NoteItem shows it as "Last modified …".
+  ────────────────────────────────────────
+  Requirement: Log all user actions
+  Status: ✅
+  Where: The service logs listing, viewing, creating, updating and deleting
+  notes. logger.js (backend/src/utils/logger.js) handles the output, and
+  rejected or failed requests are logged by the error handler.
+  ────────────────────────────────────────
+  Requirement: At least one unit test per feature
+  Status: ✅
+  Where: Every feature has tests in both parts of the app (details below).
+  ────────────────────────────────────────
+  Requirement: No persistent storage
+  Status: ✅
+  Where: Notes are lost when the server restarts.
+  ────────────────────────────────────────
+  Requirement: In-memory database
+  Status: ✅
+  Where: note.repository.js (backend/src/repositories/note.repository.js) keeps
+  the notes in a Map.
+
+  Test coverage per feature:
+  - Backend: the service tests cover add, view, edit and delete, and each one
+    checks that the action was logged. The controller and repository have their
+    own tests.
+  - Frontend: create, update and delete are tested in useNotes, NoteItem,
+    NoteForm and App. The last-modified display and date formatting are tested
+    too.
+  - Extra: there's also a backend integration test suite. I didn't run it,
+    because the requirement asks for unit tests.
+
+  Things to know, none of which break a requirement:
+  1. The frontend isn't committed. All of frontend/ is still untracked, so
+     anyone cloning the repo now would get only the backend.
+  2. npm test in the frontend failed to start on this machine. Vitest's worker
+     processes timed out before any test ran. The tests pass when run with npx
+     vitest run --pool=threads. If you see the same problem, setting test.pool:
+     'threads' in vite.config.js (frontend/vite.config.js) would make npm test
+     work.

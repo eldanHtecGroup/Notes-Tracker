@@ -1,0 +1,1070 @@
+
+> <ide_opened_file>The user opened the file
+  c:\Notes-Tracker\backend\src\repositories\note.repository.js in the IDE. This
+  may or may not be related to the current task.</ide_opened_file>
+
+> I have created backedn part of the app
+  Create a simple tool that helps users manage their personal notes. Users can
+  write a note with a title and content, view all their saved notes, update any
+  note when needed, or delete the ones they no longer want. Each note should
+  display when it was last modified, so users can keep track of updates.
+  Functionalities
+
+  Add a new note with a title and content
+  View a list of all saved notes
+  Edit existing notes
+  Delete unwanted notes
+  Non-functional requirements
+
+  Log all user actions (e.g., creating, updating, deleting notes)
+  Ensure each feature is covered with at least one unit test
+  No need for persistent data storage
+  Technical hints and constraints
+
+  Use an in-memory database
+  please create the frontend part in the frontend folder
+  Use react and js
+
+● I'll start by looking at the backend so the frontend matches its API.
+
+  Listed 2 directories (ctrl+o to expand)
+
+● The backend expects the frontend on localhost:5173 (Vite's default), so I'll
+  scaffold a Vite + React (JS) app with Vitest + Testing Library for the unit
+  tests.
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● Now the config and entry files.
+
+● Bash(mkdir -p src/api src/hooks src/components src/utils tests && cat >
+      .gitignore <<'EOF'
+      node_modules/…)
+  ⎿  Created .env.example (+5 -0)
+      1 +# Base URL of the backend API. Leave unset in development: Vite 
+        +proxies /api to the backend.                                    
+      2 +# VITE_API_URL=http://localhost:5000/api                        
+      3 +                                                                
+      4 +# Where the dev server proxies /api requests (default: http://lo
+        +calhost:5000)                                                   
+      5 +# API_PROXY_TARGET=http://localhost:5000                        
+  ⎿  Created .gitignore (+5 -0)
+      1 +node_modules/                                                   
+      2 +dist/                                                           
+      3 +coverage/                                                       
+      4 +.env                                                            
+      5 +*.log                                                           
+  ⎿  Created index.html (+14 -0)
+       1 +<!doctype html>                                                
+       2 +<html lang="en">                                               
+       3 +  <head>                                                       
+       4 +    <meta charset="UTF-8" />                                   
+       5 +    <meta name="viewport" content="width=device-width, initial-
+         +scale=1.0" />                                                  
+       6 +    <meta name="color-scheme" content="light dark" />          
+       7 +    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http:
+         +//www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' fon
+         +t-size='90'>📝</text></svg>" />                                
+       8 +    <title>Notes Tracker</title>                               
+       9 +  </head>                                                      
+      10 +  <body>                                                       
+      11 +    <div id="root"></div>                                      
+      12 +    <script type="module" src="/src/main.jsx"></script>        
+      13 +  </body>                                                      
+      14 +</html>                                                        
+  ⎿  Created src\main.jsx (+10 -0)
+       1 +import { StrictMode } from 'react';                            
+       2 +import { createRoot } from 'react-dom/client';                 
+       3 +import App from './App.jsx';                                   
+       4 +import './index.css';                                          
+       5 +                                                               
+       6 +createRoot(document.getElementById('root')).render(            
+       7 +  <StrictMode>                                                 
+       8 +    <App />                                                    
+       9 +  </StrictMode>,                                               
+      10 +);                                                             
+  ⎿  Created tests\setup.js (+7 -0)
+      1 +import '@testing-library/jest-dom/vitest';                      
+      2 +import { cleanup } from '@testing-library/react';               
+      3 +import { afterEach } from 'vitest';                             
+      4 +                                                                
+      5 +afterEach(() => {                                               
+      6 +  cleanup();                                                    
+      7 +});                                                             
+  ⎿  … 1 more file changed
+
+● Now the API client, hook, and utilities.
+
+● Bash(cat > src/constants.js <<'EOF'
+      // Mirror the backend's limits (backend/src/models/note.model.js) so users
+      get feedback before submitting.…)
+  ⎿  Created src\api\notesApi.js (+43 -0)
+       1 +const BASE_URL = import.meta.env.VITE_API_URL || '/api';       
+       2 +                                                               
+       3 +export class ApiError extends Error {                          
+       4 +  constructor(status, message, details) {                      
+       5 +    super(message);                                            
+       6 +    this.status = status;                                      
+       7 +    this.details = details;                                    
+       8 +  }                                                            
+       9 +}                                                              
+      10 +                                                               
+      11 +// Unwraps the backend's `{ data }` envelope and turns `{ error
+         + }` responses into an ApiError.                                
+      12 +const request = async (path, options = {}) => {                
+      13 +  let response;                                                
+      14 +  try {                                                        
+      15 +    response = await fetch(`${BASE_URL}${path}`, {             
+      16 +      ...options,                                              
+      17 +      headers: { 'Content-Type': 'application/json', ...options
+         +.headers },                                                    
+      18 +    });                                                        
+      19 +  } catch {                                                    
+      20 +    throw new ApiError(0, 'Could not reach the server. Is the b
+         +ackend running?');                                             
+      21 +  }                                                            
+      22 +                                                               
+      23 +  if (response.status === 204) return null;                    
+      24 +                                                               
+      25 +  const body = await response.json().catch(() => null);        
+      26 +  if (!response.ok) {                                          
+      27 +    const { message, details } = body?.error ?? {};            
+      28 +    throw new ApiError(response.status, message || `Request fai
+         +led with status ${response.status}`, details);                 
+      29 +  }                                                            
+      30 +  return body?.data;                                           
+      31 +};                                                             
+      32 +                                                               
+      33 +export const getNotes = () => request('/notes');               
+      34 +                                                               
+      35 +export const createNote = ({ title, content }) =>              
+      36 +  request('/notes', { method: 'POST', body: JSON.stringify({ ti
+         +tle, content }) });                                            
+      37 +                                                               
+      38 +export const updateNote = (id, changes) =>                     
+      39 +  request(`/notes/${encodeURIComponent(id)}`, { method: 'PATCH'
+         +, body: JSON.stringify(changes) });                            
+      40 +                                                               
+     … 3 more lines (ctrl+o to expand)
+  ⎿  Created src\constants.js (+3 -0)
+      1 +// Mirror the backend's limits (backend/src/models/note.model.js
+        +) so users get feedback before submitting.                      
+      2 +export const TITLE_MAX_LENGTH = 200;                            
+      3 +export const CONTENT_MAX_LENGTH = 50000;                        
+  ⎿  Created src\hooks\useNotes.js (+48 -0)
+       1 +import { useCallback, useEffect, useState } from 'react';      
+       2 +import notesApi from '../api/notesApi.js';                     
+       3 +import { sortByLastModified } from '../utils/sortNotes.js';    
+       4 +                                                               
+       5 +// Owns the notes list and keeps it in sync with the backend.  
+       6 +// Mutations throw on failure so the calling component can show
+         + the error where it happened.                                  
+       7 +export const useNotes = () => {                                
+       8 +  const [notes, setNotes] = useState([]);                      
+       9 +  const [loading, setLoading] = useState(true);                
+      10 +  const [error, setError] = useState(null);                    
+      11 +                                                               
+      12 +  const loadNotes = useCallback(async () => {                  
+      13 +    setLoading(true);                                          
+      14 +    setError(null);                                            
+      15 +    try {                                                      
+      16 +      setNotes(await notesApi.getNotes());                     
+      17 +    } catch (err) {                                            
+      18 +      setError(err.message);                                   
+      19 +    } finally {                                                
+      20 +      setLoading(false);                                       
+      21 +    }                                                          
+      22 +  }, []);                                                      
+      23 +                                                               
+      24 +  useEffect(() => {                                            
+      25 +    loadNotes();                                               
+      26 +  }, [loadNotes]);                                             
+      27 +                                                               
+      28 +  const createNote = useCallback(async (fields) => {           
+      29 +    const created = await notesApi.createNote(fields);         
+      30 +    setNotes((current) => sortByLastModified([created, ...curre
+         +nt]));                                                         
+      31 +    return created;                                            
+      32 +  }, []);                                                      
+      33 +                                                               
+      34 +  const updateNote = useCallback(async (id, changes) => {      
+      35 +    const updated = await notesApi.updateNote(id, changes);    
+      36 +    setNotes((current) => sortByLastModified(current.map((note)
+         + => (note.id === id ? updated : note))));                      
+      37 +    return updated;                                            
+      38 +  }, []);                                                      
+      39 +                                                               
+      40 +  const deleteNote = useCallback(async (id) => {               
+     … 8 more lines (ctrl+o to expand)
+  ⎿  Created src\utils\formatDate.js (+9 -0)
+      1 +const formatter = new Intl.DateTimeFormat(undefined, { dateStyle
+        +: 'medium', timeStyle: 'short' });                              
+      2 +                                                                
+      3 +// Formats an ISO timestamp for display, e.g. "Oct 14, 2026, 9:2
+        +5 AM" (depends on the user's locale).                           
+      4 +export const formatDate = (isoString) => {                      
+      5 +  const date = new Date(isoString);                             
+      6 +  return Number.isNaN(date.getTime()) ? '' : formatter.format(da
+        +te);                                                            
+      7 +};                                                              
+      8 +                                                                
+      9 +export default formatDate;                                      
+  ⎿  Created src\utils\sortNotes.js (+5 -0)
+      1 +// Most recently modified first, matching the order the backend 
+        +returns.                                                        
+      2 +export const sortByLastModified = (notes) =>                    
+      3 +  [...notes].sort((a, b) => new Date(b.updatedAt) - new Date(a.u
+        +pdatedAt));                                                     
+      4 +                                                                
+      5 +export default sortByLastModified;                              
+
+● Now the components.
+
+● Bash(cat > src/components/NoteForm.jsx <<'EOF'
+      import { useId, useState } from 'react';…)
+  ⎿  Created src\App.jsx (+47 -0)
+       1 +import NoteForm from './components/NoteForm.jsx';              
+       2 +import NoteList from './components/NoteList.jsx';              
+       3 +import { useNotes } from './hooks/useNotes.js';                
+       4 +                                                               
+       5 +function App() {                                               
+       6 +  const { notes, loading, error, reload, createNote, updateNote
+         +, deleteNote } = useNotes();                                   
+       7 +                                                               
+       8 +  const renderNotes = () => {                                  
+       9 +    if (loading) return <p className="status">Loading notes…</p
+         +>;                                                             
+      10 +    if (error) {                                               
+      11 +      return (                                                 
+      12 +        <div className="load-error" role="alert">              
+      13 +          <p>Could not load notes: {error}</p>                 
+      14 +          <button type="button" className="button-secondary" on
+         +Click={reload}>                                                
+      15 +            Try again                                          
+      16 +          </button>                                            
+      17 +        </div>                                                 
+      18 +      );                                                       
+      19 +    }                                                          
+      20 +    return <NoteList notes={notes} onUpdate={updateNote} onDele
+         +te={deleteNote} />;                                            
+      21 +  };                                                           
+      22 +                                                               
+      23 +  return (                                                     
+      24 +    <div className="app">                                      
+      25 +      <header className="app-header">                          
+      26 +        <h1>Notes Tracker</h1>                                 
+      27 +        <p>Write, edit and keep track of your personal notes.</
+         +p>                                                             
+      28 +      </header>                                                
+      29 +                                                               
+      30 +      <main>                                                   
+      31 +        <section className="panel" aria-labelledby="new-note-he
+         +ading">                                                        
+      32 +          <h2 id="new-note-heading">New note</h2>              
+      33 +          <NoteForm submitLabel="Add note" onSubmit={createNote
+         +} resetOnSubmit />                                             
+      34 +        </section>                                             
+      35 +                                                               
+      36 +        <section aria-labelledby="notes-heading">              
+      37 +          <h2 id="notes-heading">                              
+      38 +            Your notes {!loading && !error && <span className="
+         +count">({notes.length})</span>}                                
+      39 +          </h2>                                                
+      40 +          {renderNotes()}                                      
+     … 7 more lines (ctrl+o to expand)
+  ⎿  Created src\components\NoteForm.jsx (+80 -0)
+       1 +import { useId, useState } from 'react';                       
+       2 +import { TITLE_MAX_LENGTH, CONTENT_MAX_LENGTH } from '../consta
+         +nts.js';                                                       
+       3 +                                                               
+       4 +// Used both to add a new note and to edit an existing one.    
+       5 +// `onSubmit` receives { title, content } and may throw; its me
+         +ssage is shown in the form.                                    
+       6 +function NoteForm({ initialTitle = '', initialContent = '', sub
+         +mitLabel, onSubmit, onCancel, resetOnSubmit = false }) {       
+       7 +  const id = useId();                                          
+       8 +  const [title, setTitle] = useState(initialTitle);            
+       9 +  const [content, setContent] = useState(initialContent);      
+      10 +  const [error, setError] = useState(null);                    
+      11 +  const [submitting, setSubmitting] = useState(false);         
+      12 +                                                               
+      13 +  const handleSubmit = async (event) => {                      
+      14 +    event.preventDefault();                                    
+      15 +    if (!title.trim()) {                                       
+      16 +      setError('Title is required.');                          
+      17 +      return;                                                  
+      18 +    }                                                          
+      19 +                                                               
+      20 +    setSubmitting(true);                                       
+      21 +    setError(null);                                            
+      22 +    try {                                                      
+      23 +      await onSubmit({ title: title.trim(), content });        
+      24 +      if (resetOnSubmit) {                                     
+      25 +        setTitle('');                                          
+      26 +        setContent('');                                        
+      27 +      }                                                        
+      28 +    } catch (err) {                                            
+      29 +      setError(err.message);                                   
+      30 +    } finally {                                                
+      31 +      setSubmitting(false);                                    
+      32 +    }                                                          
+      33 +  };                                                           
+      34 +                                                               
+      35 +  return (                                                     
+      36 +    <form className="note-form" onSubmit={handleSubmit} noValid
+         +ate>                                                           
+      37 +      <label htmlFor={`${id}-title`}>Title</label>             
+      38 +      <input                                                   
+      39 +        id={`${id}-title`}                                     
+      40 +        type="text"                                            
+     … 40 more lines (ctrl+o to expand)
+  ⎿  Created src\components\NoteItem.jsx (+87 -0)
+       1 +import { useState } from 'react';                              
+       2 +import NoteForm from './NoteForm.jsx';                         
+       3 +import { formatDate } from '../utils/formatDate.js';           
+       4 +                                                               
+       5 +function NoteItem({ note, onUpdate, onDelete }) {              
+       6 +  const [editing, setEditing] = useState(false);               
+       7 +  const [deleting, setDeleting] = useState(false);             
+       8 +  const [error, setError] = useState(null);                    
+       9 +                                                               
+      10 +  const handleSave = async ({ title, content }) => {           
+      11 +    // Only send what changed, so an untouched note keeps its l
+         +ast-modified time                                              
+      12 +    const changes = {};                                        
+      13 +    if (title !== note.title) changes.title = title;           
+      14 +    if (content !== note.content) changes.content = content;   
+      15 +                                                               
+      16 +    if (Object.keys(changes).length > 0) await onUpdate(note.id
+         +, changes);                                                    
+      17 +    setEditing(false);                                         
+      18 +  };                                                           
+      19 +                                                               
+      20 +  const handleDelete = async () => {                           
+      21 +    if (!window.confirm(`Delete "${note.title}"? This cannot be
+         + undone.`)) return;                                            
+      22 +                                                               
+      23 +    setDeleting(true);                                         
+      24 +    setError(null);                                            
+      25 +    try {                                                      
+      26 +      await onDelete(note.id);                                 
+      27 +    } catch (err) {                                            
+      28 +      setError(err.message);                                   
+      29 +      setDeleting(false);                                      
+      30 +    }                                                          
+      31 +  };                                                           
+      32 +                                                               
+      33 +  if (editing) {                                               
+      34 +    return (                                                   
+      35 +      <li className="note-item note-item-editing" aria-label={`
+         +Editing ${note.title}`}>                                       
+      36 +        <NoteForm                                              
+      37 +          initialTitle={note.title}                            
+      38 +          initialContent={note.content}                        
+      39 +          submitLabel="Save changes"                           
+      40 +          onSubmit={handleSave}                                
+     … 47 more lines (ctrl+o to expand)
+  ⎿  Created src\components\NoteList.jsx (+17 -0)
+       1 +import NoteItem from './NoteItem.jsx';                         
+       2 +                                                               
+       3 +function NoteList({ notes, onUpdate, onDelete }) {             
+       4 +  if (notes.length === 0) {                                    
+       5 +    return <p className="empty-state">No notes yet. Add your fi
+         +rst one above.</p>;                                            
+       6 +  }                                                            
+       7 +                                                               
+       8 +  return (                                                     
+       9 +    <ul className="note-list" aria-label="Saved notes">        
+      10 +      {notes.map((note) => (                                   
+      11 +        <NoteItem key={note.id} note={note} onUpdate={onUpdate}
+         + onDelete={onDelete} />                                        
+      12 +      ))}                                                      
+      13 +    </ul>                                                      
+      14 +  );                                                           
+      15 +}                                                              
+      16 +                                                               
+      17 +export default NoteList;                                       
+
+● Styles next.
+
+● Bash(cat > src/index.css <<'EOF'
+      :root {…)
+  ⎿  Created src\index.css (+237 -0)
+        1 +:root {                                                       
+        2 +  --bg: #f5f6f8;                                              
+        3 +  --surface: #ffffff;                                         
+        4 +  --text: #1d2330;                                            
+        5 +  --text-muted: #5f6b7a;                                      
+        6 +  --border: #dde1e7;                                          
+        7 +  --accent: #3157d5;                                          
+        8 +  --accent-hover: #2546b5;                                    
+        9 +  --danger: #c4372f;                                          
+       10 +  --danger-bg: #fdecea;                                       
+       11 +  --focus: #3157d580;                                         
+       12 +  --radius: 10px;                                             
+       13 +                                                              
+       14 +  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, s
+          +ans-serif;                                                    
+       15 +  line-height: 1.5;                                           
+       16 +  color: var(--text);                                         
+       17 +  background: var(--bg);                                      
+       18 +}                                                             
+       19 +                                                              
+       20 +@media (prefers-color-scheme: dark) {                         
+       21 +  :root {                                                     
+       22 +    --bg: #14171c;                                            
+       23 +    --surface: #1e222a;                                       
+       24 +    --text: #e6e9ee;                                          
+       25 +    --text-muted: #9aa4b2;                                    
+       26 +    --border: #323844;                                        
+       27 +    --accent: #6d8cf5;                                        
+       28 +    --accent-hover: #87a0f7;                                  
+       29 +    --danger: #f07a72;                                        
+       30 +    --danger-bg: #3a1e1c;                                     
+       31 +    --focus: #6d8cf580;                                       
+       32 +  }                                                           
+       33 +}                                                             
+       34 +                                                              
+       35 +* {                                                           
+       36 +  box-sizing: border-box;                                     
+       37 +}                                                             
+       38 +                                                              
+       39 +body {                                                        
+       40 +  margin: 0;                                                  
+     … 197 more lines (ctrl+o to expand)
+
+● Now the tests, laid out like the backend's (tests/unit/<layer>/...).
+
+● Bash(rm -f tests/.gitkeep; mkdir -p tests/unit/api tests/unit/utils
+      tests/unit/hooks tests/unit/components tests/helpers && cat >
+      tests/helpers/fixtures.js <<'EOF'
+      e…)
+  ⎿  Created tests\helpers\fixtures.js (+14 -0)
+       1 +export const buildNote = (overrides = {}) => ({                
+       2 +  id: 'note-1',                                                
+       3 +  title: 'Groceries',                                          
+       4 +  content: 'milk, eggs',                                       
+       5 +  createdAt: '2026-10-14T09:00:00.000Z',                       
+       6 +  updatedAt: '2026-10-14T09:00:00.000Z',                       
+       7 +  ...overrides,                                                
+       8 +});                                                            
+       9 +                                                               
+      10 +export const jsonResponse = (status, body) => ({               
+      11 +  ok: status >= 200 && status < 300,                           
+      12 +  status,                                                      
+      13 +  json: async () => body,                                      
+      14 +});                                                            
+  ⎿  Created tests\unit\api\notesApi.test.js (+72 -0)
+       1 +import { describe, it, expect, vi, beforeEach } from 'vitest'; 
+       2 +import notesApi, { ApiError } from '../../../src/api/notesApi.j
+         +s';                                                            
+       3 +import { buildNote, jsonResponse } from '../../helpers/fixtures
+         +.js';                                                          
+       4 +                                                               
+       5 +describe('notesApi', () => {                                   
+       6 +  let fetchMock;                                               
+       7 +                                                               
+       8 +  beforeEach(() => {                                           
+       9 +    fetchMock = vi.fn();                                       
+      10 +    vi.stubGlobal('fetch', fetchMock);                         
+      11 +  });                                                          
+      12 +                                                               
+      13 +  it('getNotes requests GET /api/notes and unwraps data', async
+         + () => {                                                       
+      14 +    const notes = [buildNote()];                               
+      15 +    fetchMock.mockResolvedValue(jsonResponse(200, { data: notes
+         + }));                                                          
+      16 +                                                               
+      17 +    await expect(notesApi.getNotes()).resolves.toEqual(notes); 
+      18 +    expect(fetchMock).toHaveBeenCalledWith('/api/notes', expect
+         +.objectContaining({ headers: expect.any(Object) }));           
+      19 +  });                                                          
+      20 +                                                               
+      21 +  it('createNote POSTs title and content', async () => {       
+      22 +    const note = buildNote();                                  
+      23 +    fetchMock.mockResolvedValue(jsonResponse(201, { data: note 
+         +}));                                                           
+      24 +                                                               
+      25 +    await expect(notesApi.createNote({ title: 'Groceries', cont
+         +ent: 'milk, eggs' })).resolves.toEqual(note);                  
+      26 +    const [url, options] = fetchMock.mock.calls[0];            
+      27 +    expect(url).toBe('/api/notes');                            
+      28 +    expect(options.method).toBe('POST');                       
+      29 +    expect(JSON.parse(options.body)).toEqual({ title: 'Grocerie
+         +s', content: 'milk, eggs' });                                  
+      30 +  });                                                          
+      31 +                                                               
+      32 +  it('updateNote PATCHes only the given changes', async () => {
+      33 +    fetchMock.mockResolvedValue(jsonResponse(200, { data: build
+         +Note({ title: 'New' }) }));                                    
+      34 +                                                               
+      35 +    await notesApi.updateNote('note-1', { title: 'New' });     
+      36 +    const [url, options] = fetchMock.mock.calls[0];            
+      37 +    expect(url).toBe('/api/notes/note-1');                     
+      38 +    expect(options.method).toBe('PATCH');                      
+      39 +    expect(JSON.parse(options.body)).toEqual({ title: 'New' });
+      40 +  });                                                          
+     … 32 more lines (ctrl+o to expand)
+  ⎿  Created tests\unit\utils\formatDate.test.js (+15 -0)
+       1 +import { describe, it, expect } from 'vitest';                 
+       2 +import { formatDate } from '../../../src/utils/formatDate.js'; 
+       3 +                                                               
+       4 +describe('formatDate', () => {                                 
+       5 +  it('formats an ISO timestamp as a readable date and time', ()
+         + => {                                                          
+       6 +    const iso = '2026-10-14T09:25:00.000Z';                    
+       7 +    const expected = new Intl.DateTimeFormat(undefined, { dateS
+         +tyle: 'medium', timeStyle: 'short' }).format(new Date(iso));   
+       8 +                                                               
+       9 +    expect(formatDate(iso)).toBe(expected);                    
+      10 +  });                                                          
+      11 +                                                               
+      12 +  it('returns an empty string for an invalid date', () => {    
+      13 +    expect(formatDate('not a date')).toBe('');                 
+      14 +  });                                                          
+      15 +});                                                            
+  ⎿  Created tests\unit\utils\sortNotes.test.js (+14 -0)
+       1 +import { describe, it, expect } from 'vitest';                 
+       2 +import { sortByLastModified } from '../../../src/utils/sortNote
+         +s.js';                                                         
+       3 +import { buildNote } from '../../helpers/fixtures.js';         
+       4 +                                                               
+       5 +describe('sortByLastModified', () => {                         
+       6 +  it('puts the most recently modified note first without mutati
+         +ng the input', () => {                                         
+       7 +    const older = buildNote({ id: 'a', updatedAt: '2026-10-14T0
+         +9:00:00.000Z' });                                              
+       8 +    const newer = buildNote({ id: 'b', updatedAt: '2026-10-14T1
+         +0:00:00.000Z' });                                              
+       9 +    const input = [older, newer];                              
+      10 +                                                               
+      11 +    expect(sortByLastModified(input).map((n) => n.id)).toEqual(
+         +['b', 'a']);                                                   
+      12 +    expect(input.map((n) => n.id)).toEqual(['a', 'b']);        
+      13 +  });                                                          
+      14 +});                                                            
+
+● Bash(cat > tests/unit/hooks/useNotes.test.js <<'EOF'
+      import { describe, it, expect, vi, beforeEach } from 'vitest';…)
+  ⎿  Created tests\unit\components\NoteForm.test.jsx (+73 -0)
+       1 +import { describe, it, expect, vi } from 'vitest';             
+       2 +import { render, screen } from '@testing-library/react';       
+       3 +import userEvent from '@testing-library/user-event';           
+       4 +import NoteForm from '../../../src/components/NoteForm.jsx';   
+       5 +                                                               
+       6 +describe('NoteForm', () => {                                   
+       7 +  it('submits the trimmed title and the content', async () => {
+       8 +    const user = userEvent.setup();                            
+       9 +    const onSubmit = vi.fn().mockResolvedValue();              
+      10 +    render(<NoteForm submitLabel="Add note" onSubmit={onSubmit}
+         + />);                                                          
+      11 +                                                               
+      12 +    await user.type(screen.getByLabelText('Title'), '  Grocerie
+         +s  ');                                                         
+      13 +    await user.type(screen.getByLabelText('Content'), 'milk, eg
+         +gs');                                                          
+      14 +    await user.click(screen.getByRole('button', { name: 'Add no
+         +te' }));                                                       
+      15 +                                                               
+      16 +    expect(onSubmit).toHaveBeenCalledWith({ title: 'Groceries',
+         + content: 'milk, eggs' });                                     
+      17 +  });                                                          
+      18 +                                                               
+      19 +  it('requires a title and does not submit without one', async 
+         +() => {                                                        
+      20 +    const user = userEvent.setup();                            
+      21 +    const onSubmit = vi.fn();                                  
+      22 +    render(<NoteForm submitLabel="Add note" onSubmit={onSubmit}
+         + />);                                                          
+      23 +                                                               
+      24 +    await user.type(screen.getByLabelText('Title'), '   ');    
+      25 +    await user.click(screen.getByRole('button', { name: 'Add no
+         +te' }));                                                       
+      26 +                                                               
+      27 +    expect(onSubmit).not.toHaveBeenCalled();                   
+      28 +    expect(screen.getByRole('alert')).toHaveTextContent('Title 
+         +is required.');                                                
+      29 +  });                                                          
+      30 +                                                               
+      31 +  it('clears the fields after a successful submit when resetOnS
+         +ubmit is set', async () => {                                   
+      32 +    const user = userEvent.setup();                            
+      33 +    render(<NoteForm submitLabel="Add note" onSubmit={vi.fn().m
+         +ockResolvedValue()} resetOnSubmit />);                         
+      34 +                                                               
+      35 +    await user.type(screen.getByLabelText('Title'), 'Groceries'
+         +);                                                             
+      36 +    await user.type(screen.getByLabelText('Content'), 'milk'); 
+      37 +    await user.click(screen.getByRole('button', { name: 'Add no
+         +te' }));                                                       
+      38 +                                                               
+      39 +    expect(screen.getByLabelText('Title')).toHaveValue('');    
+      40 +    expect(screen.getByLabelText('Content')).toHaveValue('');  
+     … 33 more lines (ctrl+o to expand)
+  ⎿  Created tests\unit\hooks\useNotes.test.js (+86 -0)
+       1 +import { describe, it, expect, vi, beforeEach } from 'vitest'; 
+       2 +import { renderHook, waitFor, act } from '@testing-library/reac
+         +t';                                                            
+       3 +import { useNotes } from '../../../src/hooks/useNotes.js';     
+       4 +import notesApi from '../../../src/api/notesApi.js';           
+       5 +import { buildNote } from '../../helpers/fixtures.js';         
+       6 +                                                               
+       7 +vi.mock('../../../src/api/notesApi.js', () => ({               
+       8 +  default: { getNotes: vi.fn(), createNote: vi.fn(), updateNote
+         +: vi.fn(), deleteNote: vi.fn() },                              
+       9 +}));                                                           
+      10 +                                                               
+      11 +const older = buildNote({ id: 'a', title: 'Older', updatedAt: '
+         +2026-10-14T09:00:00.000Z' });                                  
+      12 +const newer = buildNote({ id: 'b', title: 'Newer', updatedAt: '
+         +2026-10-14T10:00:00.000Z' });                                  
+      13 +                                                               
+      14 +const renderLoaded = async (notes = [newer, older]) => {       
+      15 +  notesApi.getNotes.mockResolvedValue(notes);                  
+      16 +  const hook = renderHook(() => useNotes());                   
+      17 +  await waitFor(() => expect(hook.result.current.loading).toBe(
+         +false));                                                       
+      18 +  return hook;                                                 
+      19 +};                                                             
+      20 +                                                               
+      21 +describe('useNotes', () => {                                   
+      22 +  beforeEach(() => {                                           
+      23 +    vi.clearAllMocks();                                        
+      24 +  });                                                          
+      25 +                                                               
+      26 +  it('loads notes on mount', async () => {                     
+      27 +    const { result } = await renderLoaded();                   
+      28 +                                                               
+      29 +    expect(notesApi.getNotes).toHaveBeenCalledTimes(1);        
+      30 +    expect(result.current.notes).toEqual([newer, older]);      
+      31 +    expect(result.current.error).toBeNull();                   
+      32 +  });                                                          
+      33 +                                                               
+      34 +  it('exposes the error message when loading fails, and reload 
+         +retries', async () => {                                        
+      35 +    notesApi.getNotes.mockRejectedValueOnce(new Error('Server d
+         +own'));                                                        
+      36 +    const { result } = renderHook(() => useNotes());           
+      37 +    await waitFor(() => expect(result.current.error).toBe('Serv
+         +er down'));                                                    
+      38 +                                                               
+      39 +    notesApi.getNotes.mockResolvedValueOnce([older]);          
+      40 +    await act(() => result.current.reload());                  
+     … 46 more lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The shell choked on the heredocs, so I'll write these test files with the
+  Write tool instead.
+
+  Listed 1 directory (ctrl+o to expand)
+
+● Write(tests\unit\components\NoteItem.test.jsx)
+  ⎿  Wrote 123 lines to tests\unit\components\NoteItem.test.jsx
+       1 import { describe, it, expect, vi } from 'vitest';
+       2 import { render, screen, within } from '@testing-library/react';
+       3 import userEvent from '@testing-library/user-event';
+       4 import NoteItem from '../../../src/components/NoteItem.jsx';
+       5 import { formatDate } from '../../../src/utils/formatDate.js';
+       7
+       8 const note = buildNote({ updatedAt: '2026-10-14T09:25:00.000Z' }
+         );
+       9
+      10 const renderItem = (props = {}) => {
+     … +138 lines (ctrl+o to expand)
+
+● Write(tests\unit\components\NoteList.test.jsx)
+  ⎿  Wrote 23 lines to tests\unit\components\NoteList.test.jsx
+      1 import { describe, it, expect, vi } from 'vitest';
+      2 import { render, screen } from '@testing-library/react';
+      3 import NoteList from '../../../src/components/NoteList.jsx';
+      4 import { buildNote } from '../../helpers/fixtures.js';
+      5
+      7   it('renders every note in the given order', () => {
+      8     const notes = [buildNote({ id: 'a', title: 'First' }), buildN
+        ote({ id: 'b', title: 'Second' })];
+      9     render(<NoteList notes={notes} onUpdate={vi.fn()} onDelete={v
+        i.fn()} />);
+     … +16 lines (ctrl+o to expand)
+
+● Write(tests\unit\App.test.jsx)
+  ⎿  Wrote 78 lines to tests\unit\App.test.jsx
+       1 import { describe, it, expect, vi, beforeEach } from 'vitest';
+       2 import { render, screen, within } from '@testing-library/react';
+       3 import userEvent from '@testing-library/user-event';
+       4 import App from '../../src/App.jsx';
+       5 import notesApi from '../../src/api/notesApi.js';
+       7
+       8 vi.mock('../../src/api/notesApi.js', () => ({
+       9   default: { getNotes: vi.fn(), createNote: vi.fn(), updateNote:
+          vi.fn(), deleteNote: vi.fn() },
+      10 }));
+     … +90 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● All 37 pass. Now checking for React warnings, the production build, and a real
+  end-to-end run against the backend.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● The proxy works end to end. I'll check that the backend logged the action,
+  then stop both servers.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The backend didn't log "Note created" for that request. Let me check why
+  before finishing.
+  Ran 1 shell command (ctrl+o to expand)
+
+● The logging code looks correct, so this is probably stdout buffering to a file
+  before I killed the process. I'll confirm quickly.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Logging works. The first run was just output buffering through npm. Last step
+  is updating the README.
+
+● Bash(cd /c/Notes-Tracker && python - <<'EOF'
+      p='README.md'…)
+  ⎿  Updated C:\Notes-Tracker\README.md (+122 -73)
+        1 -# Notes-Tracker                                               
+        2 -                                                              
+        3 -A full-stack app for managing personal notes: write a note wit
+          -h a title and content, view all saved notes, update them, and 
+          -delete the ones you no longer need. Each note tracks when it w
+          -as last modified.                                             
+        4 -                                                              
+        5 -- `backend/` — Node.js + Express API (layered: routes → contro
+          -llers → services → repositories)                              
+        6 -- `frontend/` — React app (coming next)                       
+        7 -                                                              
+        8 -## Backend                                                    
+        9 -                                                              
+       10 -```bash                                                       
+       11 -cd backend                                                    
+       12 -cp .env.example .env                                          
+       13 -npm install                                                   
+       14 -npm run dev     # auto-reloads on change; or `npm start`      
+       15 -```                                                           
+       16 -                                                              
+       17 -Notes are kept in an in-memory database, so they are cleared w
+          -henever the server restarts.                                  
+       18 -                                                              
+       19 -### Logging                                                   
+       20 -                                                              
+       21 -Every user action is logged: listing, viewing, creating, updat
+          -ing and deleting notes. Rejected requests (validation errors, 
+          -missing notes) are logged as warnings, and server errors as er
+          -rors with a stack trace. Note content is never logged.        
+       22 -                                                              
+       23 -```                                                           
+       24 -2026-10-14T09:39:36.600Z INFO  Note created {"noteId":"c1f42bb
+          -f-…","title":"Diary"}                                         
+       25 -2026-10-14T09:39:37.168Z INFO  Note updated {"noteId":"c1f42bb
+          -f-…","fields":["content"]}                                    
+       26 -2026-10-14T09:39:37.652Z WARN  Request rejected: Note c1f42bbf
+          --… not found {"method":"DELETE",…,"status":404}               
+       27 -```                                                           
+       28 -                                                              
+       29 -Set `LOG_LEVEL` to `debug`, `info`, `warn`, `error` or `silent
+          -`. The default is `debug` in development (also logs each HTTP 
+          -request), `info` in production and `silent` in tests.         
+       30 -                                                              
+       31 -### Tests                                                     
+       32 -                                                              
+       33 -Uses Node's built-in test runner, so there's nothing extra to 
+          -install.                                                      
+       34 -                                                              
+       35 -```bash                                                       
+       36 -npm test                  # everything                        
+       37 -npm run test:unit         # unit tests: one file per module un
+          -der tests/unit/                                               
+       38 -npm run test:integration  # HTTP tests against the running app
+       39 -npm run test:coverage     # everything, plus a coverage report
+       40 -```                                                           
+     … 155 more lines (ctrl+o to expand)
+
+● I've built the frontend in frontend/ with React 19, Vite and plain JavaScript.
+  Its 37 unit tests pass and the production build works. I also ran it against
+  your backend: notes created through the frontend's dev server reach the API,
+  and the backend logs the action (INFO Note created {...}).
+
+  To run it, start the backend, then:
+  cd frontend
+  npm install
+  npm run dev     # http://localhost:5173
+  npm test
+  The dev server forwards /api requests to localhost:5000. That's also the
+  address your backend's .env.example already allows for CORS.
+
+  What it does
+  - Add: title (required, max 200 characters) and optional content. The form
+    clears after a successful save.
+  - View: all notes, most recently changed first. Each one shows "Last modified
+    …".
+  - Edit: you edit a note in place. Only the fields you changed are sent, so
+    saving without changes doesn't update the "last modified" time.
+  - Delete: asks you to confirm first.
+  - Errors from the backend (bad input, a missing note, server not running)
+    appear next to the form or note they relate to. If the notes fail to load,
+    there's a "Try again" button.
+
+  How the code is organised
+  - src/api/notesApi.js (frontend/src/api/notesApi.js): talks to the backend and
+    turns its error responses into a readable message.
+  - src/hooks/useNotes.js (frontend/src/hooks/useNotes.js): loads the notes and
+    keeps the list up to date after each change.
+  - src/components/ (frontend/src/components/): NoteForm (used for both adding
+    and editing), NoteList and NoteItem.
+
+  Tests: there's one test file per module under frontend/tests/unit/, the same
+  layout as the backend. Add, view, edit and delete are each tested on their own
+  and again as complete flows in App.test.jsx
+  (frontend/tests/unit/App.test.jsx). The tests replace the backend with a fake,
+  so it doesn't need to be running.
+
+  Logging: all logging stays in the backend. Every action in the frontend goes
+  through the API, so the backend's existing logs already cover it.
+
+  I also added a quick start and a Frontend section to README.md, and removed
+  frontend/.gitkeep. Nothing is committed yet.
+
+> update the readme file after the react fronted is added
+
+● I added a Frontend section last turn, so I'll check the whole README now for
+  anything still out of date.
+
+  Read 1 file (ctrl+o to expand)
+
+● I noticed the quick-start commands would fail if run sequentially in one
+  terminal, and the README still lacks prerequisites, features, tech stack,
+  project layout, and a combined test-running section. I'll fix these next.
+
+● Update(C:\Notes-Tracker\README.md)
+  ⎿  Added 67 lines, removed 6 lines
+       2  
+       3  A full-stack app for managing personal notes: write a note with
+           a title and content, view all saved notes, update them, and de
+          lete the ones you no longer need. Each note tracks when it was 
+          last modified.
+       4  
+       5 -- `backend/` — Node.js + Express API (layered: routes → control
+         -lers → services → repositories)                                
+       6 -- `frontend/` — React app (Vite), talks to the backend API     
+       5 +## Features                                                    
+       6  
+       8 -## Quick start                                                 
+       7 +- Add a note with a title and content                          
+       8 +- View all saved notes, most recently modified first           
+       9 +- Edit existing notes                                          
+      10 +- Delete notes you no longer want                              
+      11 +- See when each note was last modified                         
+      12 +- Every user action is logged by the backend                   
+      13 +- Every feature is covered by unit tests, in both the backend a
+         +nd the frontend                                                
+      14  
+      10 -Run the backend and the frontend in two terminals, then open [h
+         -ttp://localhost:5173](http://localhost:5173).                  
+      15 +Notes are kept in an in-memory database, so they are cleared wh
+         +enever the backend restarts.                                   
+      16  
+      17 +## Tech stack                                                  
+      18 +                                                               
+      19 +| Part       | Stack                                           
+         +                |                                              
+      20 +| ---------- | ------------------------------------------------
+         +--------------- |                                              
+      21 +| `backend/`  | Node.js, Express 5, in-memory store, Node's bui
+         +lt-in test runner |                                            
+      22 +| `frontend/` | React 19, Vite, plain JavaScript, Vitest + Reac
+         +t Testing Library |                                            
+      23 +                                                               
+      24 +## Project structure                                           
+      25 +                                                               
+      26 +```                                                            
+      27 +Notes-Tracker/                                                 
+      28 +├── backend/                  Express API                      
+      29 +│   ├── docs/                 OpenAPI spec and Postman collecti
+         +on                                                             
+      30 +│   ├── src/                                                   
+      31 +│   │   ├── routes/           URL → controller mapping         
+      32 +│   │   ├── controllers/      HTTP in/out                      
+      33 +│   │   ├── services/         business logic and action logging
+      34 +│   │   ├── repositories/     in-memory data store             
+      35 +│   │   ├── models/           note shape and limits            
+      36 +│   │   ├── validators/       request body validation          
+      37 +│   │   ├── middlewares/      validation, 404 and error handlin
+         +g                                                              
+      38 +│   │   └── utils/            logger, ApiError, asyncHandler   
+      39 +│   └── tests/                unit and integration tests       
+      40 +└── frontend/                 React app                        
+      41 +    ├── src/                                                   
+      42 +    │   ├── api/              fetch wrapper for the notes endpo
+         +ints                                                           
+      43 +    │   ├── hooks/            useNotes: notes state and API cal
+         +ls                                                             
+      44 +    │   ├── components/       NoteForm, NoteList, NoteItem     
+      45 +    │   └── utils/            date formatting and sorting      
+      46 +    └── tests/unit/           one test file per module         
+      47 +```                                                            
+      48 +                                                               
+      49 +## Getting started                                             
+      50 +                                                               
+      51 +Requires Node.js 20 or newer.                                  
+      52 +                                                               
+      53 +Start the backend in one terminal:                             
+      54 +                                                               
+      55  ```bash
+      13 -cd backend && cp .env.example .env && npm install && npm run de
+         -v                                                              
+      14 -cd frontend && npm install && npm run dev                      
+      56 +cd backend                                                     
+      57 +cp .env.example .env                                           
+      58 +npm install                                                    
+      59 +npm run dev                                                    
+      60  ```
+      61  
+      62 +Start the frontend in a second terminal:                       
+      63 +                                                               
+      64 +```bash                                                        
+      65 +cd frontend                                                    
+      66 +npm install                                                    
+      67 +npm run dev                                                    
+      68 +```                                                            
+      69 +                                                               
+      70 +Then open [http://localhost:5173](http://localhost:5173). The b
+         +ackend runs on port 5000. The frontend's dev server forwards `/
+         +api` requests to it, so start the backend first.               
+      71 +                                                               
+      72 +To run every test, from the project root:                      
+      73 +                                                               
+      74 +```bash                                                        
+      75 +(cd backend && npm test) && (cd frontend && npm test)          
+      76 +```                                                            
+      77 +                                                               
+      78  ## Backend
+      79  
+      80  ```bash
+
+● Update(C:\Notes-Tracker\README.md)
+  ⎿  Removed 2 lines
+      84  npm run dev     # auto-reloads on change; or `npm start`
+      85  ```
+      86  
+      87 -Notes are kept in an in-memory database, so they are cleared wh
+         -enever the server restarts.                                    
+      88 -                                                               
+      87  ### Logging
+      88  
+      89  Every user action is logged: listing, viewing, creating, updati
+          ng and deleting notes. Rejected requests (validation errors, mi
+          ssing notes) are logged as warnings, and server errors as error
+          s with a stack trace. Note content is never logged.
+
+● Update(C:\Notes-Tracker\README.md)
+  ⎿  Added 16 lines, removed 8 lines
+      152  npm run preview   # serve the production build
+      153  ```
+      154  
+      155 -The dev server proxies `/api` to the backend at `http://localh
+          -ost:5000`, so start the backend first. To point the app somewh
+          -ere else, copy `.env.example` to `.env` and set `VITE_API_URL`
+          - (the full API base URL, used by the built app) or `API_PROXY_
+          -TARGET` (where the dev server proxies to).                    
+      155 +The dev server proxies `/api` to the backend at `http://localh
+          +ost:5000`, so start the backend first.                        
+      156  
+      157 -What you can do:                                              
+      157 +To use a different backend, copy `.env.example` to `.env` and 
+          +set one of:                                                   
+      158  
+      159 -- **Add** a note with a title (required, max 200 characters) a
+          -nd optional content                                           
+      160 -- **View** all notes, most recently modified first, each showi
+          -ng when it was last modified                                  
+      161 -- **Edit** a note in place. Only changed fields are sent, so s
+          -aving an untouched note doesn't change its last-modified time 
+      162 -- **Delete** a note after confirming                          
+      159 +| Variable           | Used by          | Purpose             
+          +                                                    |         
+      160 +| ------------------ | ---------------- | --------------------
+          +--------------------------------------------------- |         
+      161 +| `API_PROXY_TARGET` | `npm run dev`    | Where the dev server
+          + proxies `/api` to (default `http://localhost:5000`) |        
+      162 +| `VITE_API_URL`     | the built app    | Full API base URL, e
+          +.g. `https://notes.example.com/api`. Read at build time, so re
+          +build after changing it. If it points to another origin, add t
+          +hat origin to the backend's `CORS_ORIGIN`. |                  
+      163  
+      164 -Errors from the backend (validation, missing notes, server unr
+          -eachable) are shown next to the form or note they relate to.  
+      164 +### Using the app                                             
+      165  
+      166 -Structure:                                                    
+      166 +- **Add:** fill in the title (required, max 200 characters) an
+          +d optional content in the **New note** form, then click **Add 
+          +note**.                                                       
+      167 +- **View:** notes are listed under **Your notes**, most recent
+          +ly modified first. Each shows when it was last modified.      
+      168 +- **Edit:** click **Edit** on a note, change it, then click **
+          +Save changes** (or **Cancel**). Only changed fields are sent, 
+          +so saving an untouched note doesn't change its last-modified t
+          +ime.                                                          
+      169 +- **Delete:** click **Delete** and confirm.                   
+      170  
+      171 +Errors from the backend (validation, missing notes, server unr
+          +eachable) appear next to the form or note they relate to. If t
+          +he notes can't be loaded, a **Try again** button reloads them.
+      172 +                                                              
+      173 +### Code structure                                            
+      174 +                                                              
+      175  - `src/api/notesApi.js` — fetch wrapper for the notes endpoint
+           s; unwraps `{ data }` and throws `ApiError` on `{ error }`
+      176  - `src/hooks/useNotes.js` — loads the notes and keeps the list
+            in sync after each create, update or delete
+      177  - `src/components/` — `NoteForm` (shared by add and edit), `No
+           teList`, `NoteItem`
+      178  - `src/utils/` — date formatting and sorting
+      179 +- `src/constants.js` — title and content length limits, matchi
+          +ng the backend's                                              
+      180  
+      181  ### Tests
+      182  
+
+● I'll check that the new "run every test" command works from the project root.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● The backend tests pass (my filter was looking for the wrong output format).
+  Now the frontend:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● I've updated README.md so it covers the whole app now that the React frontend
+  exists. I ran the new "run every test" command from the project root: all 55
+  backend tests and 37 frontend tests pass.
+
+  Added near the top
+  - Features: the four note actions, the "last modified" time, logging of every
+    user action, and unit tests in both parts. The note that data is in memory
+    and is cleared on restart moved here from the Backend section.
+  - Tech stack: a short table for the backend and frontend.
+  - Project structure: a folder tree of both parts with a one-line purpose for
+    each folder.
+  - Getting started: Node 20+, separate steps for starting the backend and
+    frontend in two terminals, and one command that runs both test suites. This
+    replaces the old quick-start, which failed if you pasted it into a single
+    terminal.
+
+  Frontend section, expanded
+  - The two settings (API_PROXY_TARGET and VITE_API_URL) are now in a table
+    showing which command uses each. It also notes that VITE_API_URL only takes
+    effect after a rebuild, and that a backend on another address must be added
+    to its CORS_ORIGIN.
+  - Using the app: what to click to add, edit and delete notes, plus the "Try
+    again" button.
+  - Code structure: now also lists src/constants.js.
+
+  The Backend section is unchanged except for the sentence that moved to
+  Features. Nothing is committed yet.
